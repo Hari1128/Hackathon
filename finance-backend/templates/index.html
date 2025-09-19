@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Autonomous Finance Dashboard — Advanced</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#f4f7fb; --card:#ffffff; --muted:#6b7280; --accent:#2563eb; --danger:#ef4444; --success:#10b981;
+  }
+  body{font-family: 'Inter', sans-serif; background:var(--bg); margin:0; padding:28px;}
+  header{display:flex; align-items:center; justify-content:space-between; gap:20px; margin-bottom:18px;}
+  h1{margin:0; font-size:20px;}
+  .layout{display:grid; grid-template-columns: 360px 1fr; gap:20px;}
+  .left, .right{display:flex; flex-direction:column; gap:20px;}
+  .card{background:var(--card); border-radius:12px; padding:18px; box-shadow:0 6px 20px rgba(2,6,23,0.06);}
+  .file-row{display:flex; gap:10px; align-items:center;}
+  input[type=file]{flex:1;}
+  .btn{background:var(--accent); color:#fff; padding:8px 12px; border-radius:8px; border:none; cursor:pointer;}
+  .btn.danger{background:var(--danger);}
+  .kpi-row{display:flex; gap:12px; margin-bottom:6px;}
+  .kpi{flex:1; background:#f8fafc; padding:12px; border-radius:10px; text-align:center;}
+  .kpi .big{font-weight:700; font-size:18px;}
+  table{width:100%; border-collapse:collapse; margin-top:8px;}
+  th,td{padding:8px; border-bottom:1px solid #f0f2f6; text-align:center; font-size:13px;}
+  th{color:var(--muted); font-weight:600;}
+  .profit-pos{color:var(--success); font-weight:600;}
+  .profit-neg{color:var(--danger); font-weight:600;}
+  .chart-wrap{height:320px;}
+  .controls{display:flex; gap:8px; align-items:center;}
+  .slider{width:160px;}
+  .insights{display:flex; flex-direction:column; gap:8px;}
+  .pill{background:#fff; padding:8px 10px; border-radius:8px; box-shadow:0 4px 12px rgba(2,6,23,0.04);}
+  footer{margin-top:20px; color:var(--muted); font-size:13px;}
+  @media (max-width:980px){ .layout{grid-template-columns:1fr; } .left{order:2} .right{order:1} }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>Autonomous Finance Dashboard</h1>
+    <div style="color:var(--muted); font-size:13px;">Smart finance — forecasts, scenarios & AI insights</div>
+  </div>
+  <div style="display:flex; gap:8px;">
+    <button class="pill" onclick="downloadCSV()">Download CSV</button>
+    <button class="pill" onclick="refreshAll()">Refresh</button>
+  </div>
+</header>
+
+<div class="layout">
+  <!-- LEFT COLUMN -->
+  <div class="left">
+
+    <div class="card">
+      <h3 style="margin:0 0 8px 0">Data Management</h3>
+      <div class="file-row">
+        <input id="csvFile" type="file" accept=".csv" />
+        <button class="btn" onclick="uploadCSV()">Upload (replace)</button>
+      </div>
+      <hr style="margin:12px 0;border:none;border-top:1px solid #eef2ff;">
+      <div>
+        <div style="font-weight:600; margin-bottom:8px;">Add Single Record</div>
+        <input id="m_month" placeholder="Month (e.g., Jul)" />
+        <input id="m_revenue" placeholder="Revenue" type="number" />
+        <input id="m_expenses" placeholder="Expenses" type="number" />
+        <div style="display:flex; gap:8px;">
+          <button class="btn" style="flex:1;" onclick="addSingle()">Add</button>
+          <button class="btn danger" style="flex:1;" onclick="deleteAll()">Delete All</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3 style="margin:0 0 8px 0">KPI Summary</h3>
+      <div class="kpi-row">
+        <div class="kpi"><div style="color:var(--muted)">Total Revenue</div><div class="big" id="kpiRevenue">$0</div></div>
+        <div class="kpi"><div style="color:var(--muted)">Total Expenses</div><div class="big" id="kpiExpenses">$0</div></div>
+        <div class="kpi"><div style="color:var(--muted)">Total Profit</div><div class="big" id="kpiProfit">$0</div></div>
+      </div>
+      <div style="display:flex; gap:8px;">
+        <div class="pill" id="bestMonth">Best: —</div>
+        <div class="pill" id="worstMonth">Worst: —</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3 style="margin:0 0 8px 0">Insights & Alerts</h3>
+      <div id="insightsBox" class="insights">
+        <div class="pill">Loading insights...</div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- RIGHT COLUMN -->
+  <div class="right">
+
+    <div class="card">
+      <h3 style="margin:0 0 10px 0">Charts & Controls</h3>
+
+      <!-- Scenario sliders -->
+      <div style="display:flex; gap:10px; align-items:center; margin-bottom:10px;">
+        <div style="flex:1;">
+          <label style="font-size:13px;">Revenue Growth (%)</label>
+          <input id="s_rev" class="slider" type="range" min="-50" max="200" value="10" oninput="sliderChange()" />
+          <div style="font-size:13px; color:var(--muted)"><span id="s_rev_val">10</span>%</div>
+        </div>
+        <div style="flex:1;">
+          <label style="font-size:13px;">Expense Growth (%)</label>
+          <input id="s_exp" class="slider" type="range" min="-50" max="200" value="5" oninput="sliderChange()" />
+          <div style="font-size:13px; color:var(--muted)"><span id="s_exp_val">5</span>%</div>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:6px;">
+          <button class="btn" onclick="applyScenario()">Apply</button>
+          <button class="pill" onclick="resetScenario()">Reset</button>
+        </div>
+      </div>
+
+      <div class="chart-wrap">
+        <canvas id="mainChart"></canvas>
+      </div>
+      <div style="display:flex; gap:8px; margin-top:10px;">
+        <button class="pill" onclick="showForecast()">Show 3-model Forecast</button>
+        <button class="pill" onclick="downloadChart()">Export Chart</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3 style="margin:0 0 8px 0">Data Table</h3>
+      <div style="overflow:auto; max-height:300px;">
+        <table id="dataTable">
+          <thead><tr><th>Month</th><th>Revenue</th><th>Expenses</th><th>Profit</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<footer>Tip: Upload a CSV (month,revenue,expenses) to replace data. Use sliders to simulate scenarios in real time.</footer>
+
+<script>
+/* -------------------------
+   Utilities & state
+   -------------------------*/
+let mainChart=null, forecastChart=null;
+let rawData = []; // current DB rows
+const usd = v => "$" + Number(v).toLocaleString(undefined, {maximumFractionDigits:0});
+
+/* -------------------------
+   Fetch & render helpers
+   -------------------------*/
+async function fetchFinance(){
+  const res = await fetch('/finance');
+  rawData = await res.json();
+  renderTable(rawData);
+  renderKPIs(rawData);
+  getInsights();
+  drawMainChart(rawData);
+}
+
+function renderTable(data){
+  const tbody = document.querySelector("#dataTable tbody");
+  tbody.innerHTML = "";
+  data.forEach(r=>{
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td>${r.month}</td><td>${usd(r.revenue)}</td><td>${usd(r.expenses)}</td><td class="${r.profit>=0?'profit-pos':'profit-neg'}">${usd(r.profit)}</td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+function renderKPIs(data){
+  if(data.length===0){
+    document.getElementById('kpiRevenue').innerText = "$0";
+    document.getElementById('kpiExpenses').innerText = "$0";
+    document.getElementById('kpiProfit').innerText = "$0";
+    document.getElementById('bestMonth').innerText = "Best: —";
+    document.getElementById('worstMonth').innerText = "Worst: —";
+    return;
+  }
+  const totalRevenue = data.reduce((s,r)=>s+r.revenue,0);
+  const totalExpenses = data.reduce((s,r)=>s+r.expenses,0);
+  const totalProfit = data.reduce((s,r)=>s+r.profit,0);
+  document.getElementById('kpiRevenue').innerText = usd(totalRevenue);
+  document.getElementById('kpiExpenses').innerText = usd(totalExpenses);
+  document.getElementById('kpiProfit').innerText = usd(totalProfit);
+  const best = data.reduce((a,b)=> b.profit>a.profit?b:a).month;
+  const worst = data.reduce((a,b)=> b.profit<a.profit?b:a).month;
+  document.getElementById('bestMonth').innerText = "Best: "+best;
+  document.getElementById('worstMonth').innerText = "Worst: "+worst;
+}
+
+/* -------------------------
+   Insights & Alerts
+   -------------------------*/
+async function getInsights(){
+  const res = await fetch('/insights');
+  const payload = await res.json();
+  const box = document.getElementById('insightsBox');
+  box.innerHTML = "";
+  if(payload.alerts && payload.alerts.length){
+    payload.alerts.forEach(a=>{
+      const d = document.createElement('div'); d.className='pill'; d.style.borderLeft='4px solid '+(a.toLowerCase().includes('high')? '#ef4444':'#f59e0b'); d.innerText = a;
+      box.appendChild(d);
+    });
+  }
+  payload.insights.forEach(i=>{
+    const d = document.createElement('div'); d.className='pill'; d.innerText = i;
+    box.appendChild(d);
+  });
+}
+
+/* -------------------------
+   Charts
+   -------------------------*/
+function drawMainChart(data){
+  const ctx = document.getElementById('mainChart').getContext('2d');
+  const labels = data.map(r=>r.month);
+  const revenue = data.map(r=>r.revenue);
+  const expenses = data.map(r=>r.expenses);
+  const profit = data.map(r=>r.profit);
+  if(mainChart) mainChart.destroy();
+  mainChart = new Chart(ctx, {
+    type:'line',
+    data:{
+      labels,
+      datasets:[
+        {label:'Revenue', data:revenue, borderColor:'#10b981', tension:0.2, pointRadius:3},
+        {label:'Expenses', data:expenses, borderColor:'#ef4444', tension:0.2, pointRadius:3},
+        {label:'Profit', data:profit, borderColor:'#2563eb', tension:0.2, pointRadius:3}
+      ]
+    },
+    options:{
+      responsive:true,
+      plugins:{
+        tooltip:{
+          callbacks:{
+            label: c => c.dataset.label + ": " + usd(c.raw)
+          }
+        },
+        legend:{ position:'bottom' }
+      },
+      scales:{ y:{ beginAtZero:true } }
+    }
+  });
+}
+
+/* -------------------------
+   Forecast (3-model)
+   -------------------------*/
+async function showForecast(){
+  const res = await fetch('/forecast');
+  const payload = await res.json();
+  // payload: { linear:[], rf:[], combined:[] }
+  // overlay lines onto chart
+  const labels = payload.combined.map(r => r.month);
+  const ctx = document.getElementById('mainChart').getContext('2d');
+  // append datasets for forecasts
+  const linearRev = payload.linear.map(r=>r.revenue);
+  const rfRev = payload.rf.map(r=>r.revenue);
+  const combRev = payload.combined.map(r=>r.revenue);
+
+  // Add forecast datasets (dashed)
+  mainChart.data.labels = mainChart.data.labels.concat(labels);
+  mainChart.data.datasets.push(
+    {label:'Linear Forecast (Revenue)', data: Array(mainChart.data.labels.length - labels.length).fill(null).concat(linearRev), borderColor:'#94a3b8', borderDash:[5,5], fill:false},
+    {label:'RF Forecast (Revenue)', data: Array(mainChart.data.labels.length - labels.length).fill(null).concat(rfRev), borderColor:'#f97316', borderDash:[5,5], fill:false},
+    {label:'Combined Forecast (Revenue)', data: Array(mainChart.data.labels.length - labels.length).fill(null).concat(combRev), borderColor:'#7c3aed', borderDash:[2,6], fill:false}
+  );
+  mainChart.update();
+}
+
+/* -------------------------
+   Scenario sliders & apply
+   -------------------------*/
+function sliderChange(){
+  document.getElementById('s_rev_val').innerText = document.getElementById('s_rev').value;
+  document.getElementById('s_exp_val').innerText = document.getElementById('s_exp').value;
+}
+
+async function applyScenario(){
+  const rev = Number(document.getElementById('s_rev').value)/100;
+  const exp = Number(document.getElementById('s_exp').value)/100;
+  const res = await fetch('/scenario',{
+    method:'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({revenue_growth: rev, expense_growth: exp})
+  });
+  const payload = await res.json();
+  // update table, kpi, chart with scenario data (payload.scenario)
+  renderTable(payload.scenario);
+  renderKPIs(payload.scenario);
+  drawMainChart(payload.scenario);
+
+  // display insights
+  const box = document.getElementById('insightsBox');
+  box.innerHTML = "";
+  payload.insights.alerts.forEach(a=>{
+    const d = document.createElement('div'); d.className='pill'; d.style.borderLeft='4px solid #ef4444'; d.innerText = a; box.appendChild(d);
+  });
+  payload.insights.insights.forEach(i=>{
+    const d = document.createElement('div'); d.className='pill'; d.innerText = i; box.appendChild(d);
+  });
+
+  // summary area
+  document.getElementById('scenarioSummary').innerText = payload.summary;
+  document.getElementById('revGrowthApplied').innerText = `Revenue Growth Applied: ${(rev*100).toFixed(1)}%`;
+  document.getElementById('expGrowthApplied').innerText = `Expense Growth Applied: ${(exp*100).toFixed(1)}%`;
+  // totals
+  const df = payload.scenario;
+  const totR = df.reduce((s,r)=>s+r.revenue,0), totE = df.reduce((s,r)=>s+r.expenses,0), totP = df.reduce((s,r)=>s+r.profit,0);
+  document.getElementById('totalRevenue').innerText = 'Total Revenue: '+usd(totR);
+  document.getElementById('totalExpenses').innerText = 'Total Expenses: '+usd(totE);
+  document.getElementById('totalProfit').innerText = 'Total Profit: '+usd(totP);
+  const neg = df.filter(r=>r.profit<0).map(r=>r.month);
+  document.getElementById('negativeMonths').innerText = neg.length?('Months with Negative Profit: '+neg.join(', ')):'All months profitable';
+}
+
+function resetScenario(){
+  document.getElementById('s_rev').value = 10;
+  document.getElementById('s_exp').value = 5;
+  sliderChange();
+  fetchFinance();
+}
+
+/* -------------------------
+   Upload / Delete / Add / Export
+   -------------------------*/
+async function uploadCSV(){
+  const file = document.getElementById('csvFile').files[0];
+  if(!file){ alert("Select CSV"); return; }
+  const fd = new FormData(); fd.append('file', file);
+  const res = await fetch('/finance/upload', { method:'POST', body: fd });
+  const data = await res.json();
+  if(data.error) alert("Error: "+data.error); else { alert(data.message); fetchFinance(); }
+}
+
+async function addSingle(){
+  const month = document.getElementById('m_month').value;
+  const revenue = Number(document.getElementById('m_revenue').value);
+  const expenses = Number(document.getElementById('m_expenses').value);
+  if(!month || isNaN(revenue) || isNaN(expenses)){ alert("Fill all fields"); return; }
+  const res = await fetch('/finance/add', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({month, revenue, expenses})});
+  const data = await res.json();
+  if(data.error) alert(data.error); else { fetchFinance(); }
+}
+
+async function deleteAll(){
+  if(!confirm("Delete all records?")) return;
+  await fetch('/finance/delete_all', { method:'DELETE' });
+  fetchFinance();
+}
+
+async function downloadCSV(){
+  const res = await fetch('/finance/export');
+  if(!res.ok){ alert("No data to export"); return; }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href=url; a.download='finance_export.csv'; document.body.appendChild(a); a.click(); a.remove();
+}
+
+/* -------------------------
+   Misc
+   -------------------------*/
+function refreshAll(){ resetScenario(); fetchFinance(); }
+function downloadChart(){
+  const link = document.createElement('a');
+  link.href = mainChart.toBase64Image();
+  link.download = 'chart.png';
+  link.click();
+}
+
+/* -------------------------
+   Init
+   -------------------------*/
+sliderChange();
+fetchFinance();
+
+</script>
+</body>
+</html>
